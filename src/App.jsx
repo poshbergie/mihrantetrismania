@@ -1,3 +1,5 @@
+Got it. Replace your entire `src/App.jsx` with this version. I’ve kept everything working (keyboard + touch), removed the risky backticks, and I also add an explicit `export default App;` at the bottom so the bundler definitely sees a default export.
+
 ```jsx
 import React, { useEffect, useRef, useState } from "react";
 
@@ -22,11 +24,11 @@ const SHAPES = {
 
 const ALL_KEYS = Object.keys(SHAPES);
 const LIGHTNING = "⚡";
-const ICONS = ["★","◆","●","▲","♥","♣","☀","☂","⚙",LIGHTNING,"✿","◼","⬢"]; // unicode icons
+const ICONS = ["★","◆","●","▲","♥","♣","☀","☂","⚙",LIGHTNING,"✿","◼","⬢"];
 const NON_LIGHTNING_ICONS = ICONS.filter((x) => x !== LIGHTNING);
-const LIGHTNING_PROB = 0.03; // about 3 percent chance per filled cell
+const LIGHTNING_PROB = 0.03;
 
-let PIECE_SEQ = 0; // monotonically increasing id per piece spawn
+let PIECE_SEQ = 0;
 
 function emptyBoard() {
   return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
@@ -47,7 +49,7 @@ function rotateIconsCW(m) {
 }
 
 function randIcon() {
-  if (Math.random() < LIGHTNING_PROB) return LIGHTNING; // rare lightning
+  if (Math.random() < LIGHTNING_PROB) return LIGHTNING;
   const i = (Math.random() * NON_LIGHTNING_ICONS.length) | 0;
   return NON_LIGHTNING_ICONS[i];
 }
@@ -99,7 +101,7 @@ function merge(board, piece) {
 
 function clearLines(board) {
   const kept = board.filter(row => row.some(cell => !cell));
-  const cleared = ROWS - kept.length; // number of full rows removed
+  const cleared = ROWS - kept.length;
   const pad = Array.from({ length: cleared }, () => Array(COLS).fill(null));
   return { board: [...pad, ...kept], cleared };
 }
@@ -113,11 +115,11 @@ function hasLightningInIcons(icons) {
   return false;
 }
 
-export default function App() {
+function App() {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Inject Google Font once to avoid broken URL imports
+  // Inject Google Font once
   useEffect(() => {
     const id = "press-start-2p-font";
     if (!document.getElementById(id)) {
@@ -143,28 +145,27 @@ export default function App() {
   const isTouch = typeof window !== "undefined" && ("ontouchstart" in window || navigator.maxTouchPoints > 0);
   const touchStart = useRef({ x: 0, y: 0, t: 0 });
   const lastTap = useRef(0);
-  const holdTimer = useRef(null); // for holding Down button
+  const holdTimer = useRef(null);
 
-  // Refs to avoid stale closures in RAF
+  // RAF-safe refs
   const boardRef = useRef(board);
   const pieceRef = useRef(piece);
   const overRef = useRef(gameOver);
-  const softRef = useRef(false); // whether Down key is held
-  const awardedRef = useRef(-1); // piece.id already awarded for lightning
+  const softRef = useRef(false);
+  const awardedRef = useRef(-1);
   useEffect(() => { boardRef.current = board; }, [board]);
   useEffect(() => { pieceRef.current = piece; }, [piece]);
   useEffect(() => { overRef.current = gameOver; }, [gameOver]);
 
-  // Focus so keys work
   useEffect(() => { containerRef.current?.focus(); }, []);
 
-  // Award lightning bonus exactly once per spawned piece
+  // Award lightning bonus once per piece
   useEffect(() => {
     if (!piece) return;
     if (piece.id === awardedRef.current) return;
     if (hasLightningInIcons(piece.icons)) {
       setScore((s) => {
-        const ns = s + 5; // +5 for any lightning in the spawned piece
+        const ns = s + 5;
         updateHighScore(ns);
         return ns;
       });
@@ -229,11 +230,11 @@ export default function App() {
     setPiece(first);
     setScore(0);
     setGameOver(false);
-    awardedRef.current = -1; // allow award for new first piece via effect
+    awardedRef.current = -1;
     setTimeout(() => containerRef.current?.focus(), 0);
   }
 
-  // Action helpers so both keyboard and touch can reuse them
+  // Actions
   const canMove = (dr, dc) => !collides(boardRef.current, pieceRef.current, dr, dc);
   const moveLeft = () => { if (canMove(0, -1)) setPiece(p => ({ ...p, col: p.col - 1 })); };
   const moveRight = () => { if (canMove(0, 1)) setPiece(p => ({ ...p, col: p.col + 1 })); };
@@ -259,7 +260,7 @@ export default function App() {
     lockAndSpawn(b, landed);
   };
 
-  // Lock current piece and spawn a new one. End game on top-out
+  // Lock and spawn
   function lockAndSpawn(currBoard, currPiece) {
     const merged = merge(currBoard, currPiece);
     const { board: clearedBoard, cleared } = clearLines(merged);
@@ -276,7 +277,6 @@ export default function App() {
     next.row = 0;
     next.col = Math.floor((COLS - next.matrix[0].length) / 2);
 
-    // If the spawn location is blocked, end game and show score
     if (collides(clearedBoard, next)) {
       updateHighScore(score);
       setBoard(clearedBoard);
@@ -285,13 +285,13 @@ export default function App() {
     }
 
     setBoard(clearedBoard);
-    setPiece(next); // lightning award handled by piece-id effect
+    setPiece(next);
   }
 
-  // Animation loop - keeps RAF alive even on game over; skips updates while over
+  // Loop
   useEffect(() => {
     let rafId;
-    const baseInterval = 500; // base fall speed
+    const baseInterval = 500;
     let last = 0, acc = 0;
 
     const loop = (t) => {
@@ -315,13 +315,13 @@ export default function App() {
     return () => cancelAnimationFrame(rafId);
   }, []);
 
-  // Keyboard controls
+  // Keyboard
   function handleKey(e) {
     const block = ["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"];
     if (block.includes(e.key) || e.code === "Space") e.preventDefault();
 
     if (e.key === "r" || e.key === "R") { resetGame(); return; }
-    if (gameOver) return; // ignore other keys while over
+    if (gameOver) return;
 
     if (e.key === "ArrowLeft") moveLeft();
     if (e.key === "ArrowRight") moveRight();
@@ -330,7 +330,7 @@ export default function App() {
     if (e.key === " " || e.code === "Space") hardDrop();
   }
 
-  // Touch gestures on the playfield
+  // Touch gestures
   const onTouchStart = (e) => {
     if (gameOver) return;
     const t = e.changedTouches[0];
@@ -338,7 +338,6 @@ export default function App() {
   };
 
   const onTouchMove = (e) => {
-    // prevent scrolling while interacting
     if (!e.cancelable) return;
     e.preventDefault();
   };
@@ -349,31 +348,28 @@ export default function App() {
     const dx = t.clientX - touchStart.current.x;
     const dy = t.clientY - touchStart.current.y;
     const adx = Math.abs(dx), ady = Math.abs(dy);
-    const SWIPE = 24; // threshold in px
-    const TAP_WINDOW = 200; // ms for double-tap
+    const SWIPE = 24;
+    const TAP_WINDOW = 200;
 
     if (adx < SWIPE && ady < SWIPE) {
-      // tap or double-tap
       const now = Date.now();
       if (now - lastTap.current < TAP_WINDOW) {
-        hardDrop(); // double tap -> hard drop
+        hardDrop();
       } else {
-        rotateAction(); // single tap -> rotate
+        rotateAction();
       }
       lastTap.current = now;
       return;
     }
 
     if (adx > ady) {
-      // horizontal swipe
       if (dx > 0) moveRight(); else moveLeft();
     } else {
-      // vertical swipe down -> soft drop step
       if (dy > 0) softDropStep();
     }
   };
 
-  // On-screen buttons for mobile users
+  // On-screen buttons
   const startHoldDown = () => {
     softRef.current = true;
     if (!holdTimer.current) {
@@ -450,7 +446,7 @@ export default function App() {
           </div>
         </aside>
 
-        {/* On-screen mobile controls (show on touch devices) */}
+        {/* On-screen mobile controls */}
         {isTouch && (
           <div style={{width:"100%", display:"flex", justifyContent:"center", marginTop: 12}}>
             <div style={{display:"grid", gridTemplateColumns:"repeat(5, 64px)", gap:8}}>
@@ -509,12 +505,12 @@ function drawCell(ctx, c, r, color, icon, size = CELL) {
   ctx.fillStyle = "rgba(0,0,0,0.25)";
   ctx.fillRect(x, y + size - 3, size, 3);
   ctx.fillRect(x + size - 3, y, 3, size);
-  // icon at 50 percent previous size
+  // icon at 50% size
   if (icon) {
     ctx.save();
     ctx.fillStyle = "#101010";
-    ctx.globalAlpha = 0.18; // subtle shadow
-ctx.font = Math.floor(size * 0.45) + "px 'Press Start 2P', system-ui, sans-serif";
+    ctx.globalAlpha = 0.18;
+    ctx.font = Math.floor(size * 0.45) + "px 'Press Start 2P', system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(icon, x + size / 2 + 1, y + size / 2 + 1);
@@ -564,4 +560,6 @@ ctx.font = Math.floor(size * 0.45) + "px 'Press Start 2P', system-ui, sans-serif
     console.warn("Tetris tests error", e);
   }
 })();
+
+export default App;
 ```
