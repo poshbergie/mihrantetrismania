@@ -514,7 +514,7 @@ function drawCell(ctx, c, r, color, icon, size = CELL) {
     ctx.save();
     ctx.fillStyle = "#101010";
     ctx.globalAlpha = 0.18; // subtle shadow
-    ctx.font = `${Math.floor(size * 0.45)}px 'Press Start 2P', system-ui, sans-serif`;
+ctx.font = Math.floor(size * 0.45) + "px 'Press Start 2P', system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(icon, x + size / 2 + 1, y + size / 2 + 1);
