@@ -1,8 +1,10 @@
+```jsx
 import React, { useEffect, useRef, useState } from "react";
 
-// Mihran's Tetris Mania - soft drop, rotate, hard drop, score + high score, icons in blocks
+// Mihran's Tetris Mania - keyboard + touch controls
 // Left/Right = move, Down = soft drop, Up = rotate, Space = hard drop, R = restart.
-// ASCII-only comments to avoid unicode punctuation issues.
+// On touch: tap = rotate, swipe left/right = move, swipe down = soft drop, double-tap = hard drop.
+// On-screen buttons provided for mobile: Left, Rotate, Right, Down, Drop.
 
 const COLS = 10;
 const ROWS = 20;
@@ -137,6 +139,12 @@ export default function App() {
   });
   const [gameOver, setGameOver] = useState(false);
 
+  // Touch helpers
+  const isTouch = typeof window !== "undefined" && ("ontouchstart" in window || navigator.maxTouchPoints > 0);
+  const touchStart = useRef({ x: 0, y: 0, t: 0 });
+  const lastTap = useRef(0);
+  const holdTimer = useRef(null); // for holding Down button
+
   // Refs to avoid stale closures in RAF
   const boardRef = useRef(board);
   const pieceRef = useRef(piece);
@@ -147,7 +155,7 @@ export default function App() {
   useEffect(() => { pieceRef.current = piece; }, [piece]);
   useEffect(() => { overRef.current = gameOver; }, [gameOver]);
 
-  // Focus so keys work inside Canvas preview
+  // Focus so keys work
   useEffect(() => { containerRef.current?.focus(); }, []);
 
   // Award lightning bonus exactly once per spawned piece
@@ -225,6 +233,32 @@ export default function App() {
     setTimeout(() => containerRef.current?.focus(), 0);
   }
 
+  // Action helpers so both keyboard and touch can reuse them
+  const canMove = (dr, dc) => !collides(boardRef.current, pieceRef.current, dr, dc);
+  const moveLeft = () => { if (canMove(0, -1)) setPiece(p => ({ ...p, col: p.col - 1 })); };
+  const moveRight = () => { if (canMove(0, 1)) setPiece(p => ({ ...p, col: p.col + 1 })); };
+  const softDropStep = () => {
+    const b = boardRef.current; const p = pieceRef.current;
+    if (!collides(b, p, 1, 0)) setPiece(prev => ({ ...prev, row: prev.row + 1 }));
+    else lockAndSpawn(b, p);
+  };
+  const rotateAction = () => {
+    const b = boardRef.current; const p = pieceRef.current;
+    if (p.key === "O") return;
+    const rotated = rotateMatrixCW(p.matrix);
+    const rotatedIcons = rotateIconsCW(p.icons);
+    const kicks = [0, 1, -1, 2, -2];
+    for (let k of kicks) {
+      if (!collides(b, p, 0, k, rotated)) { setPiece(prev => ({ ...prev, matrix: rotated, icons: rotatedIcons, col: prev.col + k })); break; }
+    }
+  };
+  const hardDrop = () => {
+    const b = boardRef.current; const p = pieceRef.current;
+    let d = 0; while (!collides(b, p, d + 1, 0)) d++;
+    const landed = { ...p, row: p.row + d };
+    lockAndSpawn(b, landed);
+  };
+
   // Lock current piece and spawn a new one. End game on top-out
   function lockAndSpawn(currBoard, currPiece) {
     const merged = merge(currBoard, currPiece);
@@ -268,12 +302,10 @@ export default function App() {
 
       if (!overRef.current && acc >= interval) {
         acc = 0;
-        const b = boardRef.current;
-        const p = pieceRef.current;
-        if (!collides(b, p, 1, 0)) {
+        if (!collides(boardRef.current, pieceRef.current, 1, 0)) {
           setPiece((prev) => ({ ...prev, row: prev.row + 1 }));
         } else {
-          lockAndSpawn(b, p);
+          lockAndSpawn(boardRef.current, pieceRef.current);
         }
       }
       rafId = requestAnimationFrame(loop);
@@ -283,7 +315,7 @@ export default function App() {
     return () => cancelAnimationFrame(rafId);
   }, []);
 
-  // Controls
+  // Keyboard controls
   function handleKey(e) {
     const block = ["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp"];
     if (block.includes(e.key) || e.code === "Space") e.preventDefault();
@@ -291,41 +323,71 @@ export default function App() {
     if (e.key === "r" || e.key === "R") { resetGame(); return; }
     if (gameOver) return; // ignore other keys while over
 
-    const b = boardRef.current;
-    const p = pieceRef.current;
-
-    if (e.key === "ArrowLeft" && !collides(b, p, 0, -1)) setPiece((prev) => ({ ...prev, col: prev.col - 1 }));
-    if (e.key === "ArrowRight" && !collides(b, p, 0, 1)) setPiece((prev) => ({ ...prev, col: prev.col + 1 }));
-
-    // Down: soft drop (speed up only)
-    if (e.key === "ArrowDown") {
-      softRef.current = true; // accelerate loop while held
-      // also nudge one row immediately for responsiveness
-      const bNow = boardRef.current;
-      const pNow = pieceRef.current;
-      if (!collides(bNow, pNow, 1, 0)) setPiece((prev) => ({ ...prev, row: prev.row + 1 }));
-      else lockAndSpawn(bNow, pNow);
-    }
-
-    if (e.key === "ArrowUp") {
-      if (p.key !== "O") {
-        const rotated = rotateMatrixCW(p.matrix);
-        const rotatedIcons = rotateIconsCW(p.icons);
-        const kicks = [0, 1, -1, 2, -2];
-        for (let k of kicks) {
-          if (!collides(b, p, 0, k, rotated)) { setPiece((prev) => ({ ...prev, matrix: rotated, icons: rotatedIcons, col: prev.col + k })); break; }
-        }
-      }
-    }
-
-    if (e.key === " " || e.code === "Space") {
-      // Hard drop - lock immediately
-      let d = 0;
-      while (!collides(b, p, d + 1, 0)) d++;
-      const landed = { ...p, row: p.row + d };
-      lockAndSpawn(b, landed);
-    }
+    if (e.key === "ArrowLeft") moveLeft();
+    if (e.key === "ArrowRight") moveRight();
+    if (e.key === "ArrowDown") { softRef.current = true; softDropStep(); }
+    if (e.key === "ArrowUp") rotateAction();
+    if (e.key === " " || e.code === "Space") hardDrop();
   }
+
+  // Touch gestures on the playfield
+  const onTouchStart = (e) => {
+    if (gameOver) return;
+    const t = e.changedTouches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  };
+
+  const onTouchMove = (e) => {
+    // prevent scrolling while interacting
+    if (!e.cancelable) return;
+    e.preventDefault();
+  };
+
+  const onTouchEnd = (e) => {
+    if (gameOver) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStart.current.x;
+    const dy = t.clientY - touchStart.current.y;
+    const adx = Math.abs(dx), ady = Math.abs(dy);
+    const elapsed = Date.now() - touchStart.current.t;
+
+    const SWIPE = 24; // threshold in px
+    const TAP_WINDOW = 200; // ms for double-tap
+
+    if (adx < SWIPE && ady < SWIPE) {
+      // tap or double-tap
+      const now = Date.now();
+      if (now - lastTap.current < TAP_WINDOW) {
+        hardDrop(); // double tap -> hard drop
+      } else {
+        rotateAction(); // single tap -> rotate
+      }
+      lastTap.current = now;
+      return;
+    }
+
+    if (adx > ady) {
+      // horizontal swipe
+      if (dx > 0) moveRight(); else moveLeft();
+    } else {
+      // vertical swipe down -> soft drop step
+      if (dy > 0) softDropStep();
+    }
+  };
+
+  // On-screen buttons for mobile users
+  const startHoldDown = () => {
+    softRef.current = true;
+    if (!holdTimer.current) {
+      holdTimer.current = setInterval(() => {
+        if (!overRef.current) softDropStep();
+      }, 70);
+    }
+  };
+  const stopHoldDown = () => {
+    softRef.current = false;
+    if (holdTimer.current) { clearInterval(holdTimer.current); holdTimer.current = null; }
+  };
 
   const minecraftFont = { fontFamily: "'Press Start 2P', monospace" };
 
@@ -335,7 +397,7 @@ export default function App() {
       tabIndex={0}
       onKeyDown={handleKey}
       onKeyUp={(e) => { if (e.key === 'ArrowDown') softRef.current = false; }}
-      style={{ color: "white", padding: 12, outline: "none", ...minecraftFont }}
+      style={{ color: "white", padding: 12, outline: "none", ...minecraftFont, touchAction: "none" }}
     >
       {/* Title */}
       <div style={{display:"flex", justifyContent:"center", marginBottom: 10}}>
@@ -356,10 +418,18 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{display:"flex", gap:16, justifyContent:"center", alignItems:"flex-start"}}>
+      <div style={{display:"flex", gap:16, justifyContent:"center", alignItems:"flex-start", flexWrap: 'wrap'}}>
         {/* Playfield */}
         <div style={{position:"relative"}}>
-          <canvas ref={canvasRef} width={COLS * CELL} height={ROWS * CELL} style={{borderRadius:12}} />
+          <canvas
+            ref={canvasRef}
+            width={COLS * CELL}
+            height={ROWS * CELL}
+            style={{borderRadius:12, touchAction: "none"}}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+          />
         </div>
         {/* Sidebar */}
         <aside style={{minWidth: 200, display:"grid", gap:12}}>
@@ -378,16 +448,46 @@ export default function App() {
             <div>Up: Rotate</div>
             <div>Space: Hard drop</div>
             <div>R: Restart</div>
-            <div style={{marginTop:8, opacity:0.85}}>Lightning bonus: +5 once per piece if any block in that piece shows ⚡.</div>
+            <div style={{marginTop:8, opacity:0.85}}>Touch: tap=rotate, double-tap=drop, swipe L/R=move, swipe down=soft drop.</div>
           </div>
         </aside>
+
+        {/* On-screen mobile controls (show on touch devices) */}
+        {isTouch && (
+          <div style={{width:"100%", display:"flex", justifyContent:"center", marginTop: 12}}>
+            <div style={{display:"grid", gridTemplateColumns:"repeat(5, 64px)", gap:8}}>
+              <button onClick={(e)=>{e.preventDefault(); moveLeft();}} style={btnStyle}>◀</button>
+              <button onClick={(e)=>{e.preventDefault(); rotateAction();}} style={btnStyle}>⟳</button>
+              <button onClick={(e)=>{e.preventDefault(); moveRight();}} style={btnStyle}>▶</button>
+              <button
+                onTouchStart={(e)=>{e.preventDefault(); startHoldDown();}}
+                onTouchEnd={(e)=>{e.preventDefault(); stopHoldDown();}}
+                onMouseDown={(e)=>{e.preventDefault(); startHoldDown();}}
+                onMouseUp={(e)=>{e.preventDefault(); stopHoldDown();}}
+                style={btnStyle}
+              >▼</button>
+              <button onClick={(e)=>{e.preventDefault(); hardDrop();}} style={btnStyle}>⤓</button>
+            </div>
+          </div>
+        )}
       </div>
+
       {gameOver && (
-        <div style={{textAlign:"center", marginTop:12, fontWeight:600}}>Game over. Final score: {score}. Press R to restart.</div>
+        <div style={{textAlign:"center", marginTop:12, fontWeight:600}}>Game over. Final score: {score}. Press R or tap title to restart.</div>
       )}
     </div>
   );
 }
+
+const btnStyle = {
+  fontFamily: "'Press Start 2P', monospace",
+  minHeight: 56,
+  borderRadius: 12,
+  border: "2px solid #334155",
+  background: "#1e293b",
+  color: "#e5e7eb",
+  fontSize: 18,
+};
 
 function drawMatrix(ctx, matrix, icons, col, row, opts = {}) {
   for (let r = 0; r < matrix.length; r++) {
@@ -466,3 +566,30 @@ function drawCell(ctx, c, r, color, icon, size = CELL) {
     console.warn("Tetris tests error", e);
   }
 })();
+```
+
+---
+
+## 6) `.github/workflows/deploy.yml`
+```yaml
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches: [ main ]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - run: npm ci || npm install
+      - run: npm run build
+      - uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+```
