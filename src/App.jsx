@@ -349,8 +349,6 @@ export default function App() {
     const dx = t.clientX - touchStart.current.x;
     const dy = t.clientY - touchStart.current.y;
     const adx = Math.abs(dx), ady = Math.abs(dy);
-    const elapsed = Date.now() - touchStart.current.t;
-
     const SWIPE = 24; // threshold in px
     const TAP_WINDOW = 200; // ms for double-tap
 
@@ -566,30 +564,4 @@ function drawCell(ctx, c, r, color, icon, size = CELL) {
     console.warn("Tetris tests error", e);
   }
 })();
-```
-
----
-
-## 6) `.github/workflows/deploy.yml`
-```yaml
-name: Deploy to GitHub Pages
-on:
-  push:
-    branches: [ main ]
-permissions:
-  contents: write
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-      - run: npm ci || npm install
-      - run: npm run build
-      - uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
 ```
