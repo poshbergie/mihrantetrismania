@@ -1,6 +1,3 @@
-Got it. Replace your entire `src/App.jsx` with this version. I’ve kept everything working (keyboard + touch), removed the risky backticks, and I also add an explicit `export default App;` at the bottom so the bundler definitely sees a default export.
-
-```jsx
 import React, { useEffect, useRef, useState } from "react";
 
 // Mihran's Tetris Mania - keyboard + touch controls
@@ -159,7 +156,7 @@ function App() {
 
   useEffect(() => { containerRef.current?.focus(); }, []);
 
-  // Award lightning bonus once per piece
+  // Lightning bonus once per piece
   useEffect(() => {
     if (!piece) return;
     if (piece.id === awardedRef.current) return;
@@ -562,4 +559,3 @@ function drawCell(ctx, c, r, color, icon, size = CELL) {
 })();
 
 export default App;
-```
