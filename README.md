@@ -1,1 +1,1 @@
-This is a doc tst
+This is a doc test
